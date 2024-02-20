@@ -54,6 +54,35 @@ void ACubesSpawner::Tick(float DeltaTime)
 
 }
 
+FVector ACubesSpawner::RespositionCircleCenter(FVector CurrentCubePosition)
+{
+	// raycast a line down to see where the ground is, from our current position
+	FCollisionQueryParams CircleTraceParams = FCollisionQueryParams(FName(TEXT("CircleTraceParams")), false, this);
+	CircleTraceParams.bReturnPhysicalMaterial = false;
+
+	//Re-initialize hit info
+	FHitResult Circle_Hit(ForceInit);
+
+	FVector EndTrace = CurrentCubePosition + (GetActorUpVector() * -1000.f);
+
+	//call GetWorld() from within an actor extending class
+	GetWorld()->LineTraceSingleByObjectType(
+		Circle_Hit,		//result
+		CurrentCubePosition,	//start
+		EndTrace, //end
+		FCollisionObjectQueryParams::AllStaticObjects, //collision channel
+		CircleTraceParams
+	);
+
+	if (Circle_Hit.IsValidBlockingHit())
+	{
+		// place the center at: circle radius + buffer from ground
+		return Circle_Hit.ImpactPoint + GetActorUpVector() * SpawnCircleGroundBuffer;
+	}
+
+	return FVector();
+}
+
 UAudioComponent* ACubesSpawner::GetAvailableAudioSourceComponent()
 {
 	for (UAudioComponent* audioSourceComponent: audioSourcePool)
@@ -63,6 +92,11 @@ UAudioComponent* ACubesSpawner::GetAvailableAudioSourceComponent()
 			return audioSourceComponent;
 		}
 	}
+	return nullptr;
+}
+
+AActor* ACubesSpawner::GetAvailableSoundObject()
+{
 	return nullptr;
 }
 
@@ -82,16 +116,22 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 	// We've assigned something in BP
 	if (soundObjectToSpawn)
 	{
-
-		// TODO: ADJUST SPAWN POINT VERTICALLY TO ACCOMODATE FOR CIRCLE RADIUS
 		FVector CurrentForwardSpawnPoint = GetActorLocation();
 		for (int i = 0; i < PoolSize; ++i)
 		{
-			// first forward location
-			FVector NewSpawn = CurrentForwardSpawnPoint + (GetActorForwardVector() * HorizontalBufferSpace * i);
+			
+			// 1st - forward location, push the spawn point up a bit
+			CurrentForwardSpawnPoint = CurrentForwardSpawnPoint + (GetActorForwardVector() * HorizontalBufferSpace * i);
+
+			// Adjust the vertical position
+			CurrentForwardSpawnPoint = RespositionCircleCenter(CurrentForwardSpawnPoint);
+
+			FVector NewSpawn = CurrentForwardSpawnPoint;
+
 			// 2nd - get the point on our imaginary circle
 			FColor color = FColor::Blue;
-			DrawDebugCircle(GetWorld(), NewSpawn, SpawnCircleRadius, (int32)22, color, true);
+			//FMatrix matrix = FMatrix(FPlane(FVector(1.f, 0.f, 0.f)), FPlane(FVector(1.f, 0.f, 0.f)), FPlane(FVector(1.f, 0.f, 0.f)), FPlane());
+			//DrawDebugCircle(GetWorld(), matrix, NewSpawn, SpawnCircleRadius, (int32)22, color, true);
 			FVector2D circlePoint = FMath::RandPointInCircle(SpawnCircleRadius);
 			NewSpawn += FVector(circlePoint.X, circlePoint.Y, 0.f);
 			
@@ -118,26 +158,26 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 	}
 
 	// If there are sounds TO play //the sounds we want to pick from
-	if (soundsCollection.Num() > 0.f)
-	{
-		// Get one at random (could result in them playing all the same sound!)
-		int32 Index = FMath::RandRange(0, soundsCollection.Num() - 1);
-		USoundBase* selectedSound = soundsCollection[Index];
+	//if (soundsCollection.Num() > 0.f)
+	//{
+	//	// Get one at random (could result in them playing all the same sound!)
+	//	int32 Index = FMath::RandRange(0, soundsCollection.Num() - 1);
+	//	USoundBase* selectedSound = soundsCollection[Index];
 
-		if (selectedSound)
-		{
-			// Get a "speaker" with which to play the sound
-			UAudioComponent* availableSoundSource = GetAvailableAudioSourceComponent();
-			//If we could get a speaker (ie they were not all in use)
-			if (availableSoundSource)
-			{
-				// set the sound, set random position for it, play it!
-				availableSoundSource->SetSound(selectedSound);
-				FVector NewLocation = GetActorLocation() + FMath::VRand() * FMath::FRandRange(MinSpawnRadius, MaxSpawnRadius);
-				availableSoundSource->SetWorldLocation(NewLocation);
-				availableSoundSource->Play();
-			}
-		}
-	}
+	//	if (selectedSound)
+	//	{
+	//		// Get a "speaker" with which to play the sound
+	//		UAudioComponent* availableSoundSource = GetAvailableAudioSourceComponent();
+	//		//If we could get a speaker (ie they were not all in use)
+	//		if (availableSoundSource)
+	//		{
+	//			// set the sound, set random position for it, play it!
+	//			availableSoundSource->SetSound(selectedSound);
+	//			FVector NewLocation = GetActorLocation() + FMath::VRand() * FMath::FRandRange(MinSpawnRadius, MaxSpawnRadius);
+	//			availableSoundSource->SetWorldLocation(NewLocation);
+	//			availableSoundSource->Play();
+	//		}
+	//	}
+	//}
 }
 

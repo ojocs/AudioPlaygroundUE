@@ -44,6 +44,7 @@ public:
 #pragma endregion
 
 #pragma region Spawn Logic
+public:
 	// Audio Source Spawning Logic
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SpawnAudioSource();
@@ -73,12 +74,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float SpawnCircleRadius = 500.f;
 
+	/** The buffer of our invisible circle from the ground */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	float SpawnCircleGroundBuffer = 200.f;
+
 	/** The range in which we reveal the pooled object to the player. Otherwise, keep actor hidden away */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float SpawnRange = 300.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float ZAxisScaling = 2.f;
+
+private:
+	/** 
+	* Function that repositions the center point for the imaginary circle.
+	* This is dynamic for terrain changes.
+	*/
+	FVector RespositionCircleCenter(FVector CurrentCubePosition);
 
 #pragma endregion
 
@@ -110,5 +122,8 @@ private:
 
 	// Function to get an available "speaker" from the source pool
 	UAudioComponent* GetAvailableAudioSourceComponent();
+
+	// Function to get available sound object in the pool
+	AActor* GetAvailableSoundObject();
 #pragma endregion
 };
