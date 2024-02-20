@@ -34,6 +34,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
 	TArray<USoundBase*> soundsCollection;
 
+	// Array of objects
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TArray<AActor*> soundsObjects;
+
 	// Count of "speakers" 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (ClampMin = "1", UIMin = "1"))
 	int32 PoolSize;
@@ -43,6 +47,14 @@ public:
 	// Audio Source Spawning Logic
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SpawnAudioSource();
+	
+	// Duplicate our soundObjectToSpawn. For use in BeginPlay
+	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent)
+	AActor* SpawnDuplication();
+
+	// The object to which our sounds will be attached to. Will be duplicated up to PoolSize
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	AActor* soundObjectToSpawn;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float CustomSpawnTime = 5.0f;
@@ -50,26 +62,41 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float MinSpawnRadius = 100.0f;
 
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float MaxSpawnRadius = 500.0f;
+
+	/** Horizontal buffer space between each spawn */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	float HorizontalBufferSpace = 50.f;
+
+	/** The radius of our invisible circle on which we can spawn onto */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	float SpawnCircleRadius = 500.f;
+
+	/** The range in which we reveal the pooled object to the player. Otherwise, keep actor hidden away */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	float SpawnRange = 300.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	float ZAxisScaling = 2.f;
+
 #pragma endregion
 
 #pragma region Clock
 public:
-	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "QuartzClock")
-	//UQuartzClockHandle* CubesClock;
+	/*UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "QuartzClock")
+	UQuartzClockHandle* CubesClock;*/
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "QuartzClock")
 	FName CubesClockName;
 
 	//UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "QuartzClock")
 	//FQuartzClockSettings QuartzClockSettings;
-//
-//	/*UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-//	void OnQuartzQuantizationEvents(FName ClockName, EQuartzCommandQuantization QuantizationType, int32 NumBars, int32 Beat, float BeatFraction);*/
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+	void OnQuartzQuantizationEvents(FName ClockName, EQuartzCommandQuantization QuantizationType, int32 NumBars, int32 Beat, float BeatFraction);
 private:
-//	FOnQuartzMetronomeEventBP QuartzMetronomeEvent;
+	FOnQuartzMetronomeEventBP QuartzMetronomeEvent;
 //
 //	// Clock
 //	FTimerHandle TimerHandle;
