@@ -11,6 +11,7 @@
 #include "Components/AudioComponent.h"
 #include "CubesSpawner.generated.h"
 
+class UEditorActorSubsystem;
 
 UCLASS()
 class AUDIOSYNESTHESIATEST_API ACubesSpawner : public AActor
@@ -30,13 +31,18 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 #pragma region Resource Pools
-	// Array of sounds
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-	TArray<USoundBase*> soundsCollection;
-
+	
 	// Array of objects
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
 	TArray<AActor*> soundsObjects;
+	
+	// Array of objects' destinations
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TArray<FVector> soundsObjectsDestinations;
+	
+	// Array of objects' new rotations
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
+	TArray<FRotator> soundsObjectsRotations;
 
 	// Count of "speakers" 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (ClampMin = "1", UIMin = "1"))
@@ -48,23 +54,22 @@ public:
 	// Audio Source Spawning Logic
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SpawnAudioSource();
+
+	/**
+	* Reposition the indexed sound object to the correct spot on our imaginary circle
+	* @param SoundObjectIndex The index of the sound object
+	* @param SpawnLocationIndex The index of the current spawn location
+	*/
+	UFUNCTION(BlueprintCallable)
+	void SoundObjectRepositioning(int32 SoundObjectIndex, int32 SpawnLocationIndex);
+
+	// Sound Objects Spawning Logic
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+	void InitSoundObjects();
 	
-	// Duplicate our soundObjectToSpawn. For use in BeginPlay
-	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent)
-	AActor* SpawnDuplication();
-
-	// The object to which our sounds will be attached to. Will be duplicated up to PoolSize
+	// The type of object we will spawn using our pools
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
-	AActor* soundObjectToSpawn;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
-	float CustomSpawnTime = 5.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
-	float MinSpawnRadius = 100.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
-	float MaxSpawnRadius = 500.0f;
+	TSubclassOf<AActor> SpawnerObjectClass = AActor::StaticClass();
 
 	/** Horizontal buffer space between each spawn */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
@@ -82,8 +87,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float SpawnRange = 300.f;
 
+	/** Number of total frequency bands we will be using overall. Is usually a greater number than PoolSize. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	int32 SpawnFrequencyBandsAmount = 48.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	float ZAxisScaling = 2.f;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning")
+	int32 GetNearestSpawnIndex() { return NearestSpawnIndex;  }
+
+
+	/**
+	* Locations at which we can spawn an object
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	TArray<FVector> SpawnLocations;
 
 private:
 	/** 
@@ -91,6 +110,15 @@ private:
 	* This is dynamic for terrain changes.
 	*/
 	FVector RespositionCircleCenter(FVector CurrentCubePosition);
+
+	/**
+	* Index of current and nearest spawn location to the player
+	*/
+	int32 NearestSpawnIndex;
+
+	/** reference to player character
+	*/
+	APawn* PlayerPawnRef;
 
 #pragma endregion
 
@@ -117,11 +145,6 @@ private:
 
 private:
 #pragma region Resource Pools
-	// The "speakers" themselves
-	TArray<UAudioComponent*> audioSourcePool;
-
-	// Function to get an available "speaker" from the source pool
-	UAudioComponent* GetAvailableAudioSourceComponent();
 
 	// Function to get available sound object in the pool
 	AActor* GetAvailableSoundObject();
