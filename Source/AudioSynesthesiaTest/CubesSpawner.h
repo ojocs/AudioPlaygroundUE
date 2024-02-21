@@ -13,6 +13,47 @@
 
 class UEditorActorSubsystem;
 
+USTRUCT(BlueprintType)
+struct FSoundSpawnerElement
+{
+	GENERATED_BODY()
+
+public:	
+	FSoundSpawnerElement()
+	{
+		AActor* NullActor(nullptr);
+		SoundObject = NullActor;
+		TransformDestination = FTransform();
+		CurrentSpawnLocationIndex = 0.f;
+		bUsed = false;
+	};
+
+	FSoundSpawnerElement(AActor* InObject, FTransform InTransform, int32 InIndex, uint8 InUse)
+		: SoundObject(InObject), TransformDestination(InTransform), CurrentSpawnLocationIndex(InIndex), bUsed(InUse){};
+
+	// The actor that will be used
+	UPROPERTY(BlueprintReadWrite)
+	AActor* SoundObject;
+
+	// The transform that our SoundObject will next lerp to
+	UPROPERTY(BlueprintReadWrite)
+	FTransform TransformDestination;
+
+	// Points to the current spawn location in the SpawnLocations array to which our sound object revolves around
+	UPROPERTY(BlueprintReadWrite)
+	int32 CurrentSpawnLocationIndex;
+
+	// Is this object in use?
+	UPROPERTY(BlueprintReadWrite)
+	uint8 bUsed;
+
+	// Set a new Z for TransformDestination's Scale
+	void SetNewDestinationLocationZ(FVector InScale)
+	{
+		TransformDestination.SetScale3D(InScale);
+	}
+};
+
 UCLASS()
 class AUDIOSYNESTHESIATEST_API ACubesSpawner : public AActor
 {
@@ -32,25 +73,26 @@ public:
 
 #pragma region Resource Pools
 	
-	// Array of objects
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-	TArray<AActor*> soundsObjects;
-	
-	// Array of objects' destinations
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-	TArray<FVector> soundsObjectsDestinations;
-	
-	// Array of objects' new rotations
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-	TArray<FRotator> soundsObjectsRotations;
+	// Array of our sound elements
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Pools")
+	TArray<FSoundSpawnerElement> soundElements;
 
 	// Count of "speakers" 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (ClampMin = "1", UIMin = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pools", meta = (ClampMin = "1", UIMin = "1"))
 	int32 PoolSize;
 #pragma endregion
 
 #pragma region Spawn Logic
 public:
+
+	/**
+	* Wrapper function to set a SoundSpawnerElement's Scale on its TransformDestination variable
+	* @param ElementIndex The index of the SoundSpawnerElement
+	* @param InScale The new scale we wish to set as our destination
+	*/
+	UFUNCTION(BlueprintCallable)
+	void SoundElementSetScale(UPARAM(ref) int32 ElementIndex, FVector InScale);
+
 	// Audio Source Spawning Logic
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SpawnAudioSource();
@@ -66,6 +108,13 @@ public:
 	// Sound Objects Spawning Logic
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void InitSoundObjects();
+
+	/** 
+	* When do we change the transforms for our Sound Elements?
+	* Acts as a pseudo difficulty level too
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	EQuartzCommandQuantization SpawnTimeQuantization;
 	
 	// The type of object we will spawn using our pools
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
@@ -91,8 +140,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	int32 SpawnFrequencyBandsAmount = 48.f;
 
+	/**
+	* Scaling multipliers for the spawned objects
+	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
-	float ZAxisScaling = 2.f;
+	FVector ScaleMultiplier;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning")
 	int32 GetNearestSpawnIndex() { return NearestSpawnIndex;  }

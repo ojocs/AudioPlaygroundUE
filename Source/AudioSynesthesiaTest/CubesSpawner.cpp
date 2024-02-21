@@ -45,49 +45,9 @@ void ACubesSpawner::Tick(float DeltaTime)
 
 }
 
-void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 SpawnLocationIndex)
-{
-	FVector NewSpawnOnCircle = SpawnLocations[SpawnLocationIndex];
-
-	// 2nd - get a point on our imaginary circle
-	const float RandomAngle = FMath::FRandRange(0.f, 360.f);
-	// random angle on a circle's circumference: Cosine = x , sine = y ; therefore -- r * cosine(angle) = X && r * sine(angle) = Y --> give random point
-	FVector2D circlePoint = FVector2D(SpawnCircleRadius * (FMath::Cos(RandomAngle)), SpawnCircleRadius * (FMath::Sin(RandomAngle)));
-	NewSpawnOnCircle += FVector(circlePoint.X, 0.f, circlePoint.Y);
-
-	const bool IsInRange = FVector::Distance(PlayerPawnRef->GetActorLocation(), SpawnLocations[SpawnLocationIndex])
-		<= SpawnRange;
-	/* Debugging */
-#if true
-	FColor color = FColor::Blue;
-	DrawDebugCircle(GetWorld(), SpawnLocations[SpawnLocationIndex], SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
-	FColor pointColor = IsInRange ? FColor::Magenta : FColor::Yellow;
-	DrawDebugPoint(GetWorld(), NewSpawnOnCircle, 20.f, pointColor, true);
-#endif
-
-	AActor* CurrentObject = soundsObjects[SoundObjectIndex];
-	// Make sure we are in range of the player
-	if (IsInRange)
-	{
-		// Set location here, will update with lerp in BP
-		soundsObjectsDestinations[SoundObjectIndex] = NewSpawnOnCircle;
-		
-		// Set rotation here, will update with lerp in BP
-		FRotator NewRotation = FRotationMatrix::MakeFromYZ(FVector(0.f,1.f,0.f), (NewSpawnOnCircle - SpawnLocations[SpawnLocationIndex])).Rotator();
-		soundsObjectsRotations[SoundObjectIndex] = NewRotation;
-		
-		// Disable the last object
-		/*AActor* LastPoolObject = soundsObjects[PoolSize - 1];
-		LastPoolObject->SetActorHiddenInGame(true);
-		LastPoolObject->SetActorEnableCollision(false);*/
-	}
-	// Enable or disable it in game
-	CurrentObject->SetActorHiddenInGame(!IsInRange);
-	CurrentObject->SetActorEnableCollision(IsInRange);
-}
-
 void ACubesSpawner::InitSoundObjects_Implementation()
 {
+	// Set up spawn locations
 	const FVector Origin = GetActorLocation();
 	FVector CurrentForwardSpawnPoint = Origin;
 	for (int i = 0; i < SpawnFrequencyBandsAmount; ++i)
@@ -108,7 +68,7 @@ void ACubesSpawner::InitSoundObjects_Implementation()
 #endif
 	}
 
-	// go through elements in pool set them up
+	// Set up Pool
 	for (int32 i = 0; i < PoolSize; ++i)
 	{
 		if (IsValid(SpawnerObjectClass))
@@ -120,11 +80,8 @@ void ACubesSpawner::InitSoundObjects_Implementation()
 
 				AActor* spawnDuplicate = CurrentWorld->SpawnActor<AActor>(SpawnerObjectClass, SpawnTransform);
 				spawnDuplicate->SetActorHiddenInGame(true);
-				soundsObjects.Add(spawnDuplicate);
-
-				// Initialize destinations and rotations
-				soundsObjectsDestinations.Add(spawnDuplicate->GetActorLocation());
-				soundsObjectsRotations.Add(spawnDuplicate->GetActorRotation());
+				FSoundSpawnerElement NewSoundElement(spawnDuplicate, spawnDuplicate->GetActorTransform(), i, true);
+				soundElements.Add(NewSoundElement);
 
 				// Place correctly
 				SoundObjectRepositioning(i, i);
@@ -175,12 +132,10 @@ AActor* ACubesSpawner::GetAvailableSoundObject()
 
 void ACubesSpawner::OnQuartzQuantizationEvents_Implementation(FName ClockName, EQuartzCommandQuantization QuantizationType, int32 NumBars, int32 Beat, float BeatFraction)
 {
-	switch (QuantizationType)
+	if (QuantizationType == SpawnTimeQuantization)
 	{
-	case EQuartzCommandQuantization::Bar:
 		SpawnAudioSource();
-		break;
-	};
+	}
 }
 
 // Called from base quartz quantization implementation
@@ -189,9 +144,19 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 	// We've assigned something in BP
 	if (IsValid(SpawnerObjectClass))
 	{
+		const bool bInvalidPlayerRef = !IsValid(PlayerPawnRef);
+		FVector PlayerLocation = bInvalidPlayerRef ? GetActorLocation() : PlayerPawnRef->GetActorLocation();;
+		if (bInvalidPlayerRef)
+		{
+			PlayerPawnRef = GetWorld()->GetFirstPlayerController()->GetPawn();
+			if (IsValid(PlayerPawnRef))
+			{
+				PlayerLocation = PlayerPawnRef->GetActorLocation();
+			}
+		}
 		// See which spawn point is closest, stop ourselves at the last PoolSize amount
 		const float OldNearestSpawnIndex = NearestSpawnIndex;
-		float DistanceToOldSpawnLocation = FVector::Dist2D(SpawnLocations[NearestSpawnIndex], PlayerPawnRef->GetActorLocation());
+		float DistanceToOldSpawnLocation = FVector::Dist2D(SpawnLocations[NearestSpawnIndex], PlayerLocation);
 		for (int SpawnIndex = 0; SpawnIndex < SpawnFrequencyBandsAmount - PoolSize; ++SpawnIndex)
 		{
 			const float DistanceToLocation = FVector::Dist2D(SpawnLocations[SpawnIndex], PlayerPawnRef->GetActorLocation());
@@ -219,3 +184,46 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 	}
 }
 
+void ACubesSpawner::SoundElementSetScale(UPARAM(ref)int32 ElementIndex, FVector InScale)
+{
+	FSoundSpawnerElement* element = &soundElements[ElementIndex]; 
+	element->SetNewDestinationLocationZ(InScale);
+}
+
+void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 SpawnLocationIndex)
+{
+	FVector NewSpawnOnCircle = SpawnLocations[SpawnLocationIndex];
+
+	// 2nd - get a point on our imaginary circle
+	const float RandomAngle = FMath::FRandRange(0.f, 360.f);
+	// random angle on a circle's circumference: Cosine = x , sine = y ; therefore -- r * cosine(angle) = X && r * sine(angle) = Y --> give random point
+	FVector2D circlePoint = FVector2D(SpawnCircleRadius * (FMath::Cos(RandomAngle)), SpawnCircleRadius * (FMath::Sin(RandomAngle)));
+	NewSpawnOnCircle += FVector(circlePoint.X, 0.f, circlePoint.Y);
+
+	const bool IsInRange = FVector::Distance(PlayerPawnRef->GetActorLocation(), SpawnLocations[SpawnLocationIndex])
+		<= SpawnRange;
+	/* Debugging */
+#if true
+	FColor color = FColor::Blue;
+	DrawDebugCircle(GetWorld(), SpawnLocations[SpawnLocationIndex], SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
+	FColor pointColor = IsInRange ? FColor::Magenta : FColor::Yellow;
+	DrawDebugPoint(GetWorld(), NewSpawnOnCircle, 20.f, pointColor, true);
+#endif
+
+	FSoundSpawnerElement* SoundElement = &soundElements[SoundObjectIndex];
+	/*if (IsInRange)
+	{*/
+		FRotator NewRotation = FRotationMatrix::MakeFromYZ(FVector(0.f, 1.f, 0.f), (NewSpawnOnCircle - SpawnLocations[SpawnLocationIndex])).Rotator();
+
+		SoundElement->TransformDestination.SetRotation(FQuat(NewRotation));
+		SoundElement->TransformDestination.SetLocation(NewSpawnOnCircle);
+		SoundElement->CurrentSpawnLocationIndex = SpawnLocationIndex;
+		// Disable the last object
+		/*AActor* LastPoolObject = soundsObjects[PoolSize - 1];
+		LastPoolObject->SetActorHiddenInGame(true);
+		LastPoolObject->SetActorEnableCollision(false);*/
+	//}
+
+	SoundElement->SoundObject->SetActorHiddenInGame(!IsInRange);
+	SoundElement->SoundObject->SetActorEnableCollision(IsInRange);
+}
