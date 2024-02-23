@@ -3,6 +3,10 @@
 
 #include "CubesSpawner.h"
 #include "Subsystems/EditorActorSubsystem.h"
+#include "AudioSynesthesiaGameModeBase.h"
+
+// Only allow with editor, also change here to true/false for debugging
+#define DEBUG (WITH_EDITOR && false)
 
 // Sets default values
 ACubesSpawner::ACubesSpawner()
@@ -23,7 +27,9 @@ void ACubesSpawner::BeginPlay()
 	Super::BeginPlay();
 	
 	PlayerPawnRef = GetWorld()->GetFirstPlayerController()->GetPawn();
-	
+	GameModeRef = Cast<AAudioSynesthesiaGameModeBase>(GetWorld()->GetAuthGameMode());
+
+	GameModeRef->OnCubeSpawnerDebugToggled.AddDynamic(this, &ACubesSpawner::ToggleDebug);
 	//CubesClock->Init(GetWorld());
 
 	// Set up clock to spawn cubes on metronome quantization events
@@ -34,6 +40,8 @@ void ACubesSpawner::BeginPlay()
 	// subscribe the metronome event above to a clock in BP
 
 	//CubesClock->SubscribeToAllQuantizationEvents(GetWorld(), QuartzMetronomeEvent, CubesClock);
+
+
 
 	InitSoundObjects();
 }
@@ -61,13 +69,14 @@ void ACubesSpawner::InitSoundObjects_Implementation()
 		SpawnLocations.Add(CurrentForwardSpawnPoint);
 
 		/* Debugging */
-#if true
-		FColor color = FColor::Blue;
-		DrawDebugCircle(GetWorld(), CurrentForwardSpawnPoint, SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
-		DrawDebugPoint(GetWorld(), CurrentForwardSpawnPoint, 20.f, FColor::Magenta, true);
-#endif
-	}
+		if (GameModeRef && GameModeRef->GetCubeSpawnerDebug())
+		{
+			FColor color = FColor::Blue;
+			DrawDebugCircle(GetWorld(), CurrentForwardSpawnPoint, SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
+			DrawDebugPoint(GetWorld(), CurrentForwardSpawnPoint, 20.f, FColor::Magenta, true);
 
+		}
+	}
 	// Set up Pool
 	for (int32 i = 0; i < PoolSize; ++i)
 	{
@@ -203,12 +212,13 @@ void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 Spawn
 	const bool IsInRange = FVector::Distance(PlayerPawnRef->GetActorLocation(), SpawnLocations[SpawnLocationIndex])
 		<= SpawnRange;
 	/* Debugging */
-#if true
-	FColor color = FColor::Blue;
-	DrawDebugCircle(GetWorld(), SpawnLocations[SpawnLocationIndex], SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
-	FColor pointColor = IsInRange ? FColor::Magenta : FColor::Yellow;
-	DrawDebugPoint(GetWorld(), NewSpawnOnCircle, 20.f, pointColor, true);
-#endif
+	if (GameModeRef && GameModeRef->GetCubeSpawnerDebug())
+	{
+		FColor color = FColor::Blue;
+		DrawDebugCircle(GetWorld(), SpawnLocations[SpawnLocationIndex], SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
+		FColor pointColor = IsInRange ? FColor::Magenta : FColor::Yellow;
+		DrawDebugPoint(GetWorld(), NewSpawnOnCircle, 20.f, pointColor, true);
+	}
 
 	FSoundSpawnerElement* SoundElement = &soundElements[SoundObjectIndex];
 	/*if (IsInRange)

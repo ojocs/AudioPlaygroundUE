@@ -9,9 +9,11 @@
 #include "GameFramework/Actor.h"
 #include "Sound/SoundBase.h"
 #include "Components/AudioComponent.h"
+
 #include "CubesSpawner.generated.h"
 
 class UEditorActorSubsystem;
+class AAudioSynesthesiaGameModeBase;
 
 USTRUCT(BlueprintType)
 struct FSoundSpawnerElement
@@ -71,8 +73,20 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-#pragma region Resource Pools
+#pragma region Miscellaneous
+public:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Miscellaneous")
+	AAudioSynesthesiaGameModeBase* GameModeRef;
 	
+	/**
+	* Called when debug is toggled in the game mode
+	*/
+	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category = "Debug")
+	void ToggleDebug(bool NewToggle);
+#pragma endregion
+
+#pragma region Resource Pools
+public:
 	// Array of our sound elements
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Pools")
 	TArray<FSoundSpawnerElement> soundElements;
