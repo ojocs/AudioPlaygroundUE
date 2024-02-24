@@ -24,8 +24,6 @@ ACubesSpawner::ACubesSpawner()
 // Called when the game starts or when spawned
 void ACubesSpawner::BeginPlay()
 {
-	Super::BeginPlay();
-	
 	PlayerPawnRef = GetWorld()->GetFirstPlayerController()->GetPawn();
 	GameModeRef = Cast<AAudioSynesthesiaGameModeBase>(GetWorld()->GetAuthGameMode());
 
@@ -41,9 +39,9 @@ void ACubesSpawner::BeginPlay()
 
 	//CubesClock->SubscribeToAllQuantizationEvents(GetWorld(), QuartzMetronomeEvent, CubesClock);
 
-
-
 	InitSoundObjects();
+
+	Super::BeginPlay();
 }
 
 // Called every frame
@@ -64,7 +62,7 @@ void ACubesSpawner::InitSoundObjects_Implementation()
 		CurrentForwardSpawnPoint = FVector(Origin.X, Origin.Y + (HorizontalBufferSpace * i), Origin.Z);
 
 		// Adjust the vertical position
-		CurrentForwardSpawnPoint = RespositionCircleCenter(CurrentForwardSpawnPoint);
+		CurrentForwardSpawnPoint = FindBufferedPositionFromGround(CurrentForwardSpawnPoint, SpawnCircleRadius + SpawnCircleGroundBuffer);
 		// Save spawn location
 		SpawnLocations.Add(CurrentForwardSpawnPoint);
 
@@ -105,33 +103,33 @@ void ACubesSpawner::InitSoundObjects_Implementation()
 	}
 }
 
-FVector ACubesSpawner::RespositionCircleCenter(FVector CurrentCubePosition)
+FVector ACubesSpawner::FindBufferedPositionFromGround(FVector CurrentCubePosition, const float GroundBuffer)
 {
 	// raycast a line down to see where the ground is, from our current position
-	FCollisionQueryParams CircleTraceParams = FCollisionQueryParams(FName(TEXT("CircleTraceParams")), false, this);
-	CircleTraceParams.bReturnPhysicalMaterial = false;
+	FCollisionQueryParams ObjectTraceParams = FCollisionQueryParams(FName(TEXT("CircleTraceParams")), false, this);
+	ObjectTraceParams.bReturnPhysicalMaterial = false;
 
 	//Re-initialize hit info
-	FHitResult Circle_Hit(ForceInit);
-
-	FVector EndTrace = CurrentCubePosition + (GetActorUpVector() * -(1000.f + SpawnCircleRadius + SpawnCircleGroundBuffer));
+	FHitResult ObjectHit(ForceInit);
+	// Do a really long trace, just to see where we hit
+	FVector EndTrace = CurrentCubePosition + (GetActorUpVector() * -(1000.f + GroundBuffer));
 
 	//call GetWorld() from within an actor extending class
 	GetWorld()->LineTraceSingleByObjectType(
-		Circle_Hit,		//result
+		ObjectHit,
 		CurrentCubePosition,	//start
-		EndTrace, //end
+		EndTrace,
 		FCollisionObjectQueryParams::AllStaticObjects, //collision channel
-		CircleTraceParams
+		ObjectTraceParams
 	);
 
-	if (Circle_Hit.IsValidBlockingHit())
+	if (ObjectHit.IsValidBlockingHit())
 	{
-		// place the center at: circle radius + buffer from ground
-		return Circle_Hit.ImpactPoint + GetActorUpVector() * (SpawnCircleRadius + SpawnCircleGroundBuffer);
+		// object buffered at the given distance!
+		return ObjectHit.ImpactPoint + GetActorUpVector() * GroundBuffer;
 	}
-
-	return FVector();
+	// Nothing, just keep it at the current spot
+	return CurrentCubePosition;
 }
 
 AActor* ACubesSpawner::GetAvailableSoundObject()

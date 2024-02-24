@@ -170,13 +170,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	TArray<FVector> SpawnLocations;
 
-private:
-	/** 
-	* Function that repositions the center point for the imaginary circle.
+	/**
+	* Finds a position from the ground at given height buffer
 	* This is dynamic for terrain changes.
+	* @param CurrentCubePosition The current position of the object
+	* @param GroundBuffer The desired buffer distance between the object and the ground
+	* @return The new buffered position
 	*/
-	FVector RespositionCircleCenter(FVector CurrentCubePosition);
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning")
+	FVector FindBufferedPositionFromGround(FVector CurrentCubePosition, const float GroundBuffer);
 
+private:
 	/**
 	* Index of current and nearest spawn location to the player
 	*/
