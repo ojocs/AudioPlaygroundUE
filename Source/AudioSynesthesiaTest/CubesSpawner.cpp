@@ -132,11 +132,6 @@ FVector ACubesSpawner::FindBufferedPositionFromGround(FVector CurrentCubePositio
 	return CurrentCubePosition;
 }
 
-AActor* ACubesSpawner::GetAvailableSoundObject()
-{
-	return nullptr;
-}
-
 void ACubesSpawner::OnQuartzQuantizationEvents_Implementation(FName ClockName, EQuartzCommandQuantization QuantizationType, int32 NumBars, int32 Beat, float BeatFraction)
 {
 	if (QuantizationType == SpawnTimeQuantization)
@@ -161,10 +156,10 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 				PlayerLocation = PlayerPawnRef->GetActorLocation();
 			}
 		}
-		// See which spawn point is closest, stop ourselves at the last PoolSize amount
+		// See which spawn point is closest
 		const float OldNearestSpawnIndex = NearestSpawnIndex;
 		float DistanceToOldSpawnLocation = FVector::Dist2D(SpawnLocations[NearestSpawnIndex], PlayerLocation);
-		for (int SpawnIndex = 0; SpawnIndex < SpawnFrequencyBandsAmount - PoolSize; ++SpawnIndex)
+		for (int SpawnIndex = 0; SpawnIndex < SpawnFrequencyBandsAmount; ++SpawnIndex)
 		{
 			const float DistanceToLocation = FVector::Dist2D(SpawnLocations[SpawnIndex], PlayerPawnRef->GetActorLocation());
 			if (DistanceToLocation < DistanceToOldSpawnLocation)
@@ -180,11 +175,10 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 		int CurrentSpawnIndex = NearestSpawnIndex;
 		for (int CurrentPoolElement = 0; CurrentPoolElement < PoolSize; ++CurrentPoolElement)
 		{
-			SoundObjectRepositioning(CurrentPoolElement, CurrentSpawnIndex);
-
 			// Update spawn index, careful to not go out beyond PoolSize limit
-			if (CurrentSpawnIndex < SpawnFrequencyBandsAmount - PoolSize)
+			if (CurrentSpawnIndex < SpawnFrequencyBandsAmount)
 			{
+				SoundObjectRepositioning(CurrentPoolElement, CurrentSpawnIndex);
 				++CurrentSpawnIndex;
 			}
 		}
@@ -207,31 +201,48 @@ void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 Spawn
 	FVector2D circlePoint = FVector2D(SpawnCircleRadius * (FMath::Cos(RandomAngle)), SpawnCircleRadius * (FMath::Sin(RandomAngle)));
 	NewSpawnOnCircle += FVector(circlePoint.X, 0.f, circlePoint.Y);
 
-	const bool IsInRange = FVector::Distance(PlayerPawnRef->GetActorLocation(), SpawnLocations[SpawnLocationIndex])
+	const bool IsInVisibleRange = FVector::Distance(PlayerPawnRef->GetActorLocation(), SpawnLocations[SpawnLocationIndex])
 		<= SpawnRange;
+
+	/*const bool ShouldTeleport = FVector::Distance(PlayerPawnRef->GetActorLocation(), SpawnLocations[SpawnLocationIndex])
+		> SpawnRange * 0.5f;*/
 	/* Debugging */
 	if (GameModeRef && GameModeRef->GetCubeSpawnerDebug())
 	{
 		FColor color = FColor::Blue;
 		DrawDebugCircle(GetWorld(), SpawnLocations[SpawnLocationIndex], SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
-		FColor pointColor = IsInRange ? FColor::Magenta : FColor::Yellow;
+		FColor pointColor = IsInVisibleRange ? FColor::Magenta : FColor::Yellow;
 		DrawDebugPoint(GetWorld(), NewSpawnOnCircle, 20.f, pointColor, true);
 	}
 
 	FSoundSpawnerElement* SoundElement = &soundElements[SoundObjectIndex];
-	/*if (IsInRange)
-	{*/
-		FRotator NewRotation = FRotationMatrix::MakeFromYZ(FVector(0.f, 1.f, 0.f), (NewSpawnOnCircle - SpawnLocations[SpawnLocationIndex])).Rotator();
 
-		SoundElement->TransformDestination.SetRotation(FQuat(NewRotation));
+	FRotator NewRotation = FRotationMatrix::MakeFromYZ(FVector(0.f, 1.f, 0.f), (NewSpawnOnCircle - SpawnLocations[SpawnLocationIndex])).Rotator();
+	SoundElement->TransformDestination.SetRotation(FQuat(NewRotation));
+	/*if (ShouldTeleport)
+	{*/
+		
 		SoundElement->TransformDestination.SetLocation(NewSpawnOnCircle);
 		SoundElement->CurrentSpawnLocationIndex = SpawnLocationIndex;
+		SoundElement->bUsed = IsInVisibleRange;
 		// Disable the last object
 		/*AActor* LastPoolObject = soundsObjects[PoolSize - 1];
 		LastPoolObject->SetActorHiddenInGame(true);
 		LastPoolObject->SetActorEnableCollision(false);*/
 	//}
 
-	SoundElement->SoundObject->SetActorHiddenInGame(!IsInRange);
-	SoundElement->SoundObject->SetActorEnableCollision(IsInRange);
+	SoundElement->SoundObject->SetActorHiddenInGame(!IsInVisibleRange);
+	SoundElement->SoundObject->SetActorEnableCollision(IsInVisibleRange);
+}
+
+uint32 ACubesSpawner::CheckNextAvailablePosition()
+{
+	// iterate through sound elements pool
+	// check each one to see if its used
+	// transform.location = spawnlocations[index] -> then we're using that spot
+
+	// or
+	// spawnlocations => struct { location, used }
+	// then iterate through nearest locations
+	return 0;
 }

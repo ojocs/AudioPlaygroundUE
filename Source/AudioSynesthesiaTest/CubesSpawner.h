@@ -216,7 +216,7 @@ private:
 private:
 #pragma region Resource Pools
 
-	// Function to get available sound object in the pool
-	AActor* GetAvailableSoundObject();
+	// Function to get an available position within SpawnLocations
+	uint32 CheckNextAvailablePosition();
 #pragma endregion
 };
