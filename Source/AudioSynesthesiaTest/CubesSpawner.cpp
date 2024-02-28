@@ -19,6 +19,9 @@ ACubesSpawner::ACubesSpawner()
 
 	PoolSize = 10.f;
 	NearestSpawnIndex = 0.f;
+
+	CheckNearLastSpawnLocationTime = EQuartzCommandQuantization::QuarterNote;
+	SpawnLocationsIncrement = 20.f;
 }
 
 // Called when the game starts or when spawned
@@ -54,27 +57,7 @@ void ACubesSpawner::Tick(float DeltaTime)
 void ACubesSpawner::InitSoundObjects_Implementation()
 {
 	// Set up spawn locations
-	const FVector Origin = GetActorLocation();
-	FVector CurrentForwardSpawnPoint = Origin;
-	for (int i = 0; i < SpawnFrequencyBandsAmount; ++i)
-	{
-		// 1st - forward location, push the spawn point up a bit
-		CurrentForwardSpawnPoint = FVector(Origin.X, Origin.Y + (HorizontalBufferSpace * i), Origin.Z);
-
-		// Adjust the vertical position
-		CurrentForwardSpawnPoint = FindBufferedPositionFromGround(CurrentForwardSpawnPoint, SpawnCircleRadius + SpawnCircleGroundBuffer);
-		// Save spawn location
-		SpawnLocations.Add(CurrentForwardSpawnPoint);
-
-		/* Debugging */
-		if (GameModeRef && GameModeRef->GetCubeSpawnerDebug())
-		{
-			FColor color = FColor::Blue;
-			DrawDebugCircle(GetWorld(), CurrentForwardSpawnPoint, SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
-			DrawDebugPoint(GetWorld(), CurrentForwardSpawnPoint, 20.f, FColor::Magenta, true);
-
-		}
-	}
+	IncreaseSpawnLocations(SpawnFrequencyBandsAmount, GetActorLocation());
 	// Set up Pool
 	for (int32 i = 0; i < PoolSize; ++i)
 	{
@@ -138,6 +121,16 @@ void ACubesSpawner::OnQuartzQuantizationEvents_Implementation(FName ClockName, E
 	{
 		SpawnAudioSource();
 	}
+
+	if(QuantizationType == CheckNearLastSpawnLocationTime)
+	{
+		// Check if player is in range of last spawn location
+		if (IsInRangeOfLastSpawnLocation())
+		{
+			// Increase spawn locations
+			IncreaseSpawnLocations(SpawnLocationsIncrement, SpawnLocations[SpawnLocations.Num() - 1]);
+		}
+	}
 }
 
 // Called from base quartz quantization implementation
@@ -157,9 +150,11 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 			}
 		}
 		// See which spawn point is closest
+		const int32 SpawnLocationsLength = SpawnLocations.Num();
+
 		const float OldNearestSpawnIndex = NearestSpawnIndex;
 		float DistanceToOldSpawnLocation = FVector::Dist2D(SpawnLocations[NearestSpawnIndex], PlayerLocation);
-		for (int SpawnIndex = 0; SpawnIndex < SpawnFrequencyBandsAmount; ++SpawnIndex)
+		for (int SpawnIndex = 0; SpawnIndex < SpawnLocationsLength; ++SpawnIndex)
 		{
 			const float DistanceToLocation = FVector::Dist2D(SpawnLocations[SpawnIndex], PlayerPawnRef->GetActorLocation());
 			if (DistanceToLocation < DistanceToOldSpawnLocation)
@@ -176,7 +171,7 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 		for (int CurrentPoolElement = 0; CurrentPoolElement < PoolSize; ++CurrentPoolElement)
 		{
 			// Update spawn index, careful to not go out beyond PoolSize limit
-			if (CurrentSpawnIndex < SpawnFrequencyBandsAmount)
+			if (CurrentSpawnIndex < SpawnLocationsLength)
 			{
 				SoundObjectRepositioning(CurrentPoolElement, CurrentSpawnIndex);
 				++CurrentSpawnIndex;
@@ -185,10 +180,32 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 	}
 }
 
-void ACubesSpawner::SoundElementSetScale(UPARAM(ref)int32 ElementIndex, FVector InScale)
+void ACubesSpawner::SoundElementSetTransformDestination(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FTransform InTransform)
 {
-	FSoundSpawnerElement* element = &soundElements[ElementIndex]; 
-	element->SetNewDestinationLocationZ(InScale);
+	InSoundSpawnElements.TransformDestination = InTransform;
+}
+
+void ACubesSpawner::SoundElementSetScale(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FVector InScale)
+{
+	InSoundSpawnElements.SetNewDestinationLocationZ(InScale);
+}
+
+void ACubesSpawner::SoundElementSetSoundObject(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, UPARAM(ref)AActor* InSoundObject)
+{
+	if (InSoundObject)
+	{
+		InSoundSpawnElements.SoundObject = InSoundObject;
+	}
+}
+
+void ACubesSpawner::SoundElementSetIsUsed(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, uint8 InBUsed)
+{
+	InSoundSpawnElements.bUsed = InBUsed;
+}
+
+void ACubesSpawner::SoundElementSetSpawnLocationIndex(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, int32 InCurrentSpawnLocationIndex)
+{
+	InSoundSpawnElements.CurrentSpawnLocationIndex = InCurrentSpawnLocationIndex;
 }
 
 void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 SpawnLocationIndex)
@@ -235,6 +252,13 @@ void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 Spawn
 	SoundElement->SoundObject->SetActorEnableCollision(IsInVisibleRange);
 }
 
+bool ACubesSpawner::IsInRangeOfLastSpawnLocation()
+{
+	const FVector LastSpawnLocation = SpawnLocations[SpawnLocations.Num() - 1];
+	const FVector PlayerLocation = PlayerPawnRef->GetActorLocation();
+	return FVector::Distance(LastSpawnLocation, PlayerLocation) <= DistanceToIncreaseSpawnLocations;
+}
+
 uint32 ACubesSpawner::CheckNextAvailablePosition()
 {
 	// iterate through sound elements pool
@@ -246,3 +270,28 @@ uint32 ACubesSpawner::CheckNextAvailablePosition()
 	// then iterate through nearest locations
 	return 0;
 }
+
+void ACubesSpawner::IncreaseSpawnLocations(int32 SizeIncrement, const FVector StartingPosition)
+{
+	FVector CurrentForwardSpawnPoint = StartingPosition;
+	for (int i = 0; i < SizeIncrement; ++i)
+	{
+		// 1st - forward location, push the spawn point up a bit
+		CurrentForwardSpawnPoint = FVector(StartingPosition.X, StartingPosition.Y + (HorizontalBufferSpace * i), StartingPosition.Z);
+
+		// Adjust the vertical position
+		CurrentForwardSpawnPoint = FindBufferedPositionFromGround(CurrentForwardSpawnPoint, SpawnCircleRadius + SpawnCircleGroundBuffer);
+		// Save spawn location
+		SpawnLocations.Add(CurrentForwardSpawnPoint);
+
+		/* Debugging */
+		if (GameModeRef && GameModeRef->GetCubeSpawnerDebug())
+		{
+			FColor color = FColor::Blue;
+			DrawDebugCircle(GetWorld(), CurrentForwardSpawnPoint, SpawnCircleRadius, (int32)22, color, true, -1.f, (uint8)0U, 3.f, FVector(1.f, 0.f, 0.f), FVector(0.f, 0.f, 1.f), true);
+			DrawDebugPoint(GetWorld(), CurrentForwardSpawnPoint, 20.f, FColor::Magenta, true);
+
+		}
+	}
+}
+

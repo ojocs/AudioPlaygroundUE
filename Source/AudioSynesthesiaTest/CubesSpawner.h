@@ -78,6 +78,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Miscellaneous")
 	AAudioSynesthesiaGameModeBase* GameModeRef;
 	
+	/** reference to player character
+	*/
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Miscellaneous")
+	APawn* PlayerPawnRef;
+
 	/**
 	* Called when debug is toggled in the game mode
 	*/
@@ -96,17 +101,48 @@ public:
 	int32 PoolSize;
 #pragma endregion
 
-#pragma region Spawn Logic
+#pragma region SoundSpawnerElements Wrappers
 public:
+	/**
+	* Wrapper function to set TransformDestination within a SoundSpawnerElement
+	* @param InTransform A new Transform Destination
+	*/
+	UFUNCTION(BlueprintCallable, Category = "SoundSpawnerElement")
+	void SoundElementSetTransformDestination(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FTransform InTransform);
 
 	/**
 	* Wrapper function to set a SoundSpawnerElement's Scale on its TransformDestination variable
-	* @param ElementIndex The index of the SoundSpawnerElement
 	* @param InScale The new scale we wish to set as our destination
 	*/
-	UFUNCTION(BlueprintCallable)
-	void SoundElementSetScale(UPARAM(ref) int32 ElementIndex, FVector InScale);
+	UFUNCTION(BlueprintCallable, Category = "SoundSpawnerElement")
+	void SoundElementSetScale(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FVector InScale);
 
+	/**
+	* Wrapper function to set the SoundObject within a SoundSpawnerElement
+	* @param InSoundObject The new sound object
+	*/
+	UFUNCTION(BlueprintCallable, Category = "SoundSpawnerElement")
+	void SoundElementSetSoundObject(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, UPARAM(ref) AActor* InSoundObject = nullptr);
+
+
+	/**
+	* Wrapper function to set bUsed within a SoundSpawnerElement
+	* @param InBUsed A new is used value
+	*/
+	UFUNCTION(BlueprintCallable, Category = "SoundSpawnerElement")
+	void SoundElementSetIsUsed(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, uint8 InBUsed);
+
+
+		/**
+	* Wrapper function to set index of spawn location within a SoundSpawnerElement
+	* @param InCurrentSpawnLocationIndex A new index for the spawn location
+	*/
+	UFUNCTION(BlueprintCallable, Category = "SoundSpawnerElement")
+	void SoundElementSetSpawnLocationIndex(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, int32 InCurrentSpawnLocationIndex);
+#pragma endregion
+
+#pragma region Spawn Logic
+public:
 	// Audio Source Spawning Logic
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SpawnAudioSource();
@@ -163,12 +199,30 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning")
 	int32 GetNearestSpawnIndex() { return NearestSpawnIndex;  }
 
-
+#pragma region SpawnLocations
 	/**
 	* Locations at which we can spawn an object
 	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning|SpawnLocations")
 	TArray<FVector> SpawnLocations;
+
+	/**
+	* How close we have to be to the last spawn location to increase spawn locations
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning|SpawnLocations")
+	float DistanceToIncreaseSpawnLocations = 400.f;
+	
+	/**
+	* When do we check for if we're near the last Spawn Location?
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning|SpawnLocations")
+	EQuartzCommandQuantization CheckNearLastSpawnLocationTime;
+
+	/**
+	* How to increase spawn locations by when nearing the last spawn location
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning|SpawnLocations")
+	int32 SpawnLocationsIncrement;
 
 	/**
 	* Finds a position from the ground at given height buffer
@@ -177,18 +231,31 @@ public:
 	* @param GroundBuffer The desired buffer distance between the object and the ground
 	* @return The new buffered position
 	*/
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning")
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning|SpawnLocations")
 	FVector FindBufferedPositionFromGround(FVector CurrentCubePosition, const float GroundBuffer);
+
+	/**
+	* Increase spawn locations array by the given amount from a start point
+	* @param SizeIncrement The amount of spawn locations we wish to add onto our current array, starting at its end
+	* @param StartingPosition The location where we begin to increment from
+	*/
+	UFUNCTION(BlueprintCallable, Category = "Spawning|SpawnLocations")
+	void IncreaseSpawnLocations(int32 SizeIncrement, const FVector StartingPosition);
+
+
+	/**
+	* Are we in range of the last spawn location?
+	* @return Are we in range?
+	*/
+	UFUNCTION(BlueprintCallable, Category = "Spawning|SpawnLocations")
+	bool IsInRangeOfLastSpawnLocation();
 
 private:
 	/**
 	* Index of current and nearest spawn location to the player
 	*/
 	int32 NearestSpawnIndex;
-
-	/** reference to player character
-	*/
-	APawn* PlayerPawnRef;
+#pragma endregion
 
 #pragma endregion
 
