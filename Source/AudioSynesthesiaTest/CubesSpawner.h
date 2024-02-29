@@ -9,11 +9,14 @@
 #include "GameFramework/Actor.h"
 #include "Sound/SoundBase.h"
 #include "Components/AudioComponent.h"
+#include "Delegates/Delegate.h"
 
 #include "CubesSpawner.generated.h"
 
 class UEditorActorSubsystem;
 class AAudioSynesthesiaGameModeBase;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCubeSpawnerSpawnLocationsIncreased, UPARAM(ref) TArray<FVector>&, NewSpawnLocations);
 
 USTRUCT(BlueprintType)
 struct FSoundSpawnerElement
@@ -60,7 +63,7 @@ UCLASS()
 class AUDIOSYNESTHESIATEST_API ACubesSpawner : public AActor
 {
 	GENERATED_BODY()
-	
+#pragma region Basic and Overridden
 public:	
 	// Sets default values for this actor's properties
 	ACubesSpawner();
@@ -72,6 +75,7 @@ protected:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+#pragma endregion
 
 #pragma region Miscellaneous
 public:
@@ -142,10 +146,12 @@ public:
 #pragma endregion
 
 #pragma region Spawn Logic
+
+#pragma region Sound Elements
 public:
-	// Audio Source Spawning Logic
+	// Spawn the SoundObjects (SoundElements)
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-	void SpawnAudioSource();
+	void SpawnSoundObjects();
 
 	/**
 	* Reposition the indexed sound object to the correct spot on our imaginary circle
@@ -198,8 +204,17 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Spawning")
 	int32 GetNearestSpawnIndex() { return NearestSpawnIndex;  }
+#pragma endregion
 
 #pragma region SpawnLocations
+public:
+	/** Fires when the SpawnLocations increase */
+	UPROPERTY(BlueprintAssignable)
+	FCubeSpawnerSpawnLocationsIncreased OnCubeSpawnerSpawnLocationsIncreased;
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Spawning|SpawnLocations")
+	void SpawnLocationIncreased(UPARAM(ref) TArray<FVector>& NewSpawnLocations);
+
 	/**
 	* Locations at which we can spawn an object
 	*/
@@ -278,12 +293,5 @@ private:
 //	// Clock
 //	FTimerHandle TimerHandle;
 
-#pragma endregion
-
-private:
-#pragma region Resource Pools
-
-	// Function to get an available position within SpawnLocations
-	uint32 CheckNextAvailablePosition();
 #pragma endregion
 };

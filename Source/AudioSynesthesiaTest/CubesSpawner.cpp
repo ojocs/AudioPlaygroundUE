@@ -8,6 +8,7 @@
 // Only allow with editor, also change here to true/false for debugging
 #define DEBUG (WITH_EDITOR && false)
 
+#pragma region Basic and Overridden
 // Sets default values
 ACubesSpawner::ACubesSpawner()
 {
@@ -27,10 +28,14 @@ ACubesSpawner::ACubesSpawner()
 // Called when the game starts or when spawned
 void ACubesSpawner::BeginPlay()
 {
+	// Init refs
 	PlayerPawnRef = GetWorld()->GetFirstPlayerController()->GetPawn();
 	GameModeRef = Cast<AAudioSynesthesiaGameModeBase>(GetWorld()->GetAuthGameMode());
 
+	// Set up delegate callbacks
 	GameModeRef->OnCubeSpawnerDebugToggled.AddDynamic(this, &ACubesSpawner::ToggleDebug);
+	OnCubeSpawnerSpawnLocationsIncreased.AddDynamic(this, &ACubesSpawner::SpawnLocationIncreased);
+	
 	//CubesClock->Init(GetWorld());
 
 	// Set up clock to spawn cubes on metronome quantization events
@@ -41,6 +46,9 @@ void ACubesSpawner::BeginPlay()
 	// subscribe the metronome event above to a clock in BP
 
 	//CubesClock->SubscribeToAllQuantizationEvents(GetWorld(), QuartzMetronomeEvent, CubesClock);
+	
+	// Set up spawn locations
+	IncreaseSpawnLocations(SpawnFrequencyBandsAmount, GetActorLocation());
 
 	InitSoundObjects();
 
@@ -54,10 +62,34 @@ void ACubesSpawner::Tick(float DeltaTime)
 
 }
 
+#pragma endregion
+
+#pragma region Quartz
+
+void ACubesSpawner::OnQuartzQuantizationEvents_Implementation(FName ClockName, EQuartzCommandQuantization QuantizationType, int32 NumBars, int32 Beat, float BeatFraction)
+{
+	if (QuantizationType == SpawnTimeQuantization)
+	{
+		SpawnSoundObjects();
+	}
+
+	if (QuantizationType == CheckNearLastSpawnLocationTime)
+	{
+		// Check if player is in range of last spawn location
+		if (IsInRangeOfLastSpawnLocation())
+		{
+			// Increase spawn locations
+			IncreaseSpawnLocations(SpawnLocationsIncrement, SpawnLocations[SpawnLocations.Num() - 1]);
+		}
+	}
+}
+
+#pragma endregion
+
+#pragma region Sound Objects/Elements
+
 void ACubesSpawner::InitSoundObjects_Implementation()
 {
-	// Set up spawn locations
-	IncreaseSpawnLocations(SpawnFrequencyBandsAmount, GetActorLocation());
 	// Set up Pool
 	for (int32 i = 0; i < PoolSize; ++i)
 	{
@@ -115,26 +147,8 @@ FVector ACubesSpawner::FindBufferedPositionFromGround(FVector CurrentCubePositio
 	return CurrentCubePosition;
 }
 
-void ACubesSpawner::OnQuartzQuantizationEvents_Implementation(FName ClockName, EQuartzCommandQuantization QuantizationType, int32 NumBars, int32 Beat, float BeatFraction)
-{
-	if (QuantizationType == SpawnTimeQuantization)
-	{
-		SpawnAudioSource();
-	}
-
-	if(QuantizationType == CheckNearLastSpawnLocationTime)
-	{
-		// Check if player is in range of last spawn location
-		if (IsInRangeOfLastSpawnLocation())
-		{
-			// Increase spawn locations
-			IncreaseSpawnLocations(SpawnLocationsIncrement, SpawnLocations[SpawnLocations.Num() - 1]);
-		}
-	}
-}
-
 // Called from base quartz quantization implementation
-void ACubesSpawner::SpawnAudioSource_Implementation()
+void ACubesSpawner::SpawnSoundObjects_Implementation()
 {
 	// We've assigned something in BP
 	if (IsValid(SpawnerObjectClass))
@@ -178,34 +192,6 @@ void ACubesSpawner::SpawnAudioSource_Implementation()
 			}
 		}
 	}
-}
-
-void ACubesSpawner::SoundElementSetTransformDestination(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FTransform InTransform)
-{
-	InSoundSpawnElements.TransformDestination = InTransform;
-}
-
-void ACubesSpawner::SoundElementSetScale(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FVector InScale)
-{
-	InSoundSpawnElements.SetNewDestinationLocationZ(InScale);
-}
-
-void ACubesSpawner::SoundElementSetSoundObject(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, UPARAM(ref)AActor* InSoundObject)
-{
-	if (InSoundObject)
-	{
-		InSoundSpawnElements.SoundObject = InSoundObject;
-	}
-}
-
-void ACubesSpawner::SoundElementSetIsUsed(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, uint8 InBUsed)
-{
-	InSoundSpawnElements.bUsed = InBUsed;
-}
-
-void ACubesSpawner::SoundElementSetSpawnLocationIndex(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, int32 InCurrentSpawnLocationIndex)
-{
-	InSoundSpawnElements.CurrentSpawnLocationIndex = InCurrentSpawnLocationIndex;
 }
 
 void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 SpawnLocationIndex)
@@ -252,23 +238,15 @@ void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 Spawn
 	SoundElement->SoundObject->SetActorEnableCollision(IsInVisibleRange);
 }
 
+#pragma endregion
+
+#pragma region Spawn Locations
+
 bool ACubesSpawner::IsInRangeOfLastSpawnLocation()
 {
 	const FVector LastSpawnLocation = SpawnLocations[SpawnLocations.Num() - 1];
 	const FVector PlayerLocation = PlayerPawnRef->GetActorLocation();
 	return FVector::Distance(LastSpawnLocation, PlayerLocation) <= DistanceToIncreaseSpawnLocations;
-}
-
-uint32 ACubesSpawner::CheckNextAvailablePosition()
-{
-	// iterate through sound elements pool
-	// check each one to see if its used
-	// transform.location = spawnlocations[index] -> then we're using that spot
-
-	// or
-	// spawnlocations => struct { location, used }
-	// then iterate through nearest locations
-	return 0;
 }
 
 void ACubesSpawner::IncreaseSpawnLocations(int32 SizeIncrement, const FVector StartingPosition)
@@ -293,5 +271,43 @@ void ACubesSpawner::IncreaseSpawnLocations(int32 SizeIncrement, const FVector St
 
 		}
 	}
+
+	OnCubeSpawnerSpawnLocationsIncreased.Broadcast(SpawnLocations);
 }
 
+void ACubesSpawner::SpawnLocationIncreased_Implementation(TArray<FVector>& NewSpawnLocations)
+{
+	// Implement in BP or here
+}
+
+#pragma endregion
+
+#pragma region Sound Spawner Elements Wrappers
+void ACubesSpawner::SoundElementSetTransformDestination(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FTransform InTransform)
+{
+	InSoundSpawnElements.TransformDestination = InTransform;
+}
+
+void ACubesSpawner::SoundElementSetScale(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, FVector InScale)
+{
+	InSoundSpawnElements.SetNewDestinationLocationZ(InScale);
+}
+
+void ACubesSpawner::SoundElementSetSoundObject(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, UPARAM(ref)AActor* InSoundObject)
+{
+	if (InSoundObject)
+	{
+		InSoundSpawnElements.SoundObject = InSoundObject;
+	}
+}
+
+void ACubesSpawner::SoundElementSetIsUsed(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, uint8 InBUsed)
+{
+	InSoundSpawnElements.bUsed = InBUsed;
+}
+
+void ACubesSpawner::SoundElementSetSpawnLocationIndex(UPARAM(ref) FSoundSpawnerElement& InSoundSpawnElements, int32 InCurrentSpawnLocationIndex)
+{
+	InSoundSpawnElements.CurrentSpawnLocationIndex = InCurrentSpawnLocationIndex;
+}
+#pragma endregion
