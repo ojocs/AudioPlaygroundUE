@@ -2,7 +2,6 @@
 
 
 #include "CubesSpawner.h"
-#include "Subsystems/EditorActorSubsystem.h"
 #include "AudioSynesthesiaGameModeBase.h"
 
 // Only allow with editor, also change here to true/false for debugging
@@ -196,6 +195,10 @@ void ACubesSpawner::SpawnSoundObjects_Implementation()
 
 void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 SpawnLocationIndex)
 {
+	if (!IsValid(PlayerPawnRef))
+	{
+		return;
+	}
 	FVector NewSpawnOnCircle = SpawnLocations[SpawnLocationIndex];
 
 	// 2nd - get a point on our imaginary circle
@@ -244,6 +247,10 @@ void ACubesSpawner::SoundObjectRepositioning(int32 SoundObjectIndex, int32 Spawn
 
 bool ACubesSpawner::IsInRangeOfLastSpawnLocation()
 {
+	if (!IsValid(PlayerPawnRef))
+	{
+		return false;
+	}
 	const FVector LastSpawnLocation = SpawnLocations[SpawnLocations.Num() - 1];
 	const FVector PlayerLocation = PlayerPawnRef->GetActorLocation();
 	return FVector::Distance(LastSpawnLocation, PlayerLocation) <= DistanceToIncreaseSpawnLocations;
